@@ -1,12 +1,13 @@
 const { Telegraf, session } = require('telegraf');
 const { google } = require('googleapis');
+require('dotenv').config(); // Load environment variables from .env file
 
 const auth = new google.auth.GoogleAuth({
-  keyFile: '/home/ttpl-rt-113/Desktop/telepgramapp/stalwart-veld-411410-5d8032822350.json',
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  keyFile: process.env.GOOGLE_AUTH_KEY_FILE,
+  scopes: [process.env.GOOGLE_AUTH_SCOPES],
 });
 
-const bot = new Telegraf('6941792642:AAE4RPFFqTIOJlu9SG-TRgojDDvHDUcby2U');
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 // Apply the session middleware
 bot.use(session());
@@ -21,7 +22,7 @@ bot.use((ctx, next) => {
 
     ctx.session.currentQuestionIndex = ctx.session.currentQuestionIndex || 0;
     ctx.session.currentAnsIndex = ctx.session.currentAnsIndex || 2;
-    console.log('Session initialized:', ctx.session);
+
   } catch (error) {
     console.error('Error initializing session:', error.message);
   }
@@ -88,7 +89,7 @@ async function countQuestion() {
 
   const response = await sheetsAPI.spreadsheets.values.get({
     auth,
-    spreadsheetId: '1LptuwYT0NlA-7pMj0BA3WOiB_h8Taut8ig7R4s3GtvU',
+    spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
     range: `Form Responses 1!A1:Z1`,
   });
 
@@ -109,7 +110,7 @@ async function fetchQuestion(index) {
 
     const response = await sheetsAPI.spreadsheets.values.get({
       auth,
-      spreadsheetId: '1LptuwYT0NlA-7pMj0BA3WOiB_h8Taut8ig7R4s3GtvU',
+      spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
       range: `Form Responses 1!A1:Z1`,
     });
 
@@ -141,7 +142,7 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
     // Check if the cell is blank
     const checkBlankResponse = await sheetsAPI.spreadsheets.values.get({
       auth,
-      spreadsheetId: '1LptuwYT0NlA-7pMj0BA3WOiB_h8Taut8ig7R4s3GtvU',
+      spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
       range,
     });
 
@@ -151,7 +152,7 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
       // If the cell is blank, write the response
       await sheetsAPI.spreadsheets.values.update({
         auth,
-        spreadsheetId: '1LptuwYT0NlA-7pMj0BA3WOiB_h8Taut8ig7R4s3GtvU',
+        spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
         range,
         valueInputOption: 'RAW',
         resource: {
@@ -162,7 +163,7 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
       // If the cell is not blank, find the next empty row in the column
       const nextEmptyRowResponse = await sheetsAPI.spreadsheets.values.get({
         auth,
-        spreadsheetId: '1LptuwYT0NlA-7pMj0BA3WOiB_h8Taut8ig7R4s3GtvU',
+        spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
         range: `Form Responses 1!${columnLetter}:${columnLetter}`,
       });
 
@@ -171,7 +172,7 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
       // Update the response in the next empty row
       await sheetsAPI.spreadsheets.values.update({
         auth,
-        spreadsheetId: '1LptuwYT0NlA-7pMj0BA3WOiB_h8Taut8ig7R4s3GtvU',
+        spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
         range: `Form Responses 1!${columnLetter}${nextEmptyRow}`,
         valueInputOption: 'RAW',
         resource: {
