@@ -1,6 +1,8 @@
 const { Telegraf, session } = require('telegraf');
 const { google } = require('googleapis');
 require('dotenv').config(); // Load environment variables from .env file
+const { transcribeAudio } = require('./api');
+const fs = require('fs');
 
 const auth = new google.auth.GoogleAuth({
   keyFile: process.env.GOOGLE_AUTH_KEY_FILE,
@@ -67,8 +69,8 @@ bot.on('text', async (ctx) => {
     ctx.session.currentQuestionIndex++;
 
     if (ctx.session.currentQuestionIndex == NumberOfQuestion) {
-      ctx.reply('Form fillup successfully');
-      ctx.reply('You have completed the form. Type /start to submit again.');
+      await ctx.reply('Form fillup successfully');
+      await ctx.reply('You have completed the form. Type /start to submit again.');
       return;
     } else {
       // Fetch the next question from the Google Sheets
@@ -82,6 +84,55 @@ bot.on('text', async (ctx) => {
     ctx.reply('Error processing your response. Please try again.');
   }
 });
+
+// bot.on('voice', async (voiceMsg) => {
+//   const NumberOfQuestion = await countQuestion();
+
+//   const voiceFileId = voiceMsg.message.voice.file_id;
+//   const fileType = voiceMsg.message.voice.mime_type;
+
+//     // Check if the voice message contains audio data
+//     if (voiceFileId) {
+//       await bot.getFileLinkAsync(voiceFileId,fileType).then(async (audioLink) => {
+//         const response = await transcribeAudio(audioLink);
+//       });
+//     }
+    
+// });
+
+bot.on('voice', async (ctx) => {
+  const NumberOfQuestion = await countQuestion();
+
+  const voiceFileId = ctx.message.voice.file_id;
+  const fileType = ctx.message.voice.mime_type;
+  // console.log(ctx.message.voice);
+
+  // Check if the voice message contains audio data
+  if (voiceFileId) {
+
+    const audioLink = await ctx.telegram.getFileLink(voiceFileId, fileType);
+    
+    const audioPath='./AwACAgUAAxkBAAIE0WWpDS29vn8_xdX1IVialT0539R8AAK5DQACcVNIVeUzJY9nyOJNNAQ.oga'
+    const audioContent = fs.readFileSync(audioPath, { encoding: 'base64' });
+
+
+    const response = await transcribeAudio(audioContent);
+    console.log(response);
+
+
+    // // Extract transcribed text from the response
+    // const transcribedText = response.data.results[0]?.alternatives[0]?.transcript;
+
+    // if (transcribedText) {
+    //   // Update the Google Sheet with the transcribed text
+    //   await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, transcribedText);
+    // }
+
+    // console.log('Transcribed Text:', transcribedText);
+  }
+});
+
+
 
 async function countQuestion() {
   const sheetsAPI = google.sheets('v4');
@@ -103,7 +154,6 @@ async function countQuestion() {
 
 async function fetchQuestion(index) {
   try {
-    // console.log('Fetching question from Google Sheets...');
 
     const sheetsAPI = google.sheets('v4');
 
@@ -148,7 +198,7 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
     const isCellBlank = !checkBlankResponse.data.values || !checkBlankResponse.data.values[0] || checkBlankResponse.data.values[0][0] === '';
 
     if (isCellBlank) {
-      // If the cell is blank, write the response
+      // If the cell is blank, write the transcribed text
       await sheetsAPI.spreadsheets.values.update({
         auth,
         spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
@@ -168,7 +218,7 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
 
       const nextEmptyRow = nextEmptyRowResponse.data.values ? nextEmptyRowResponse.data.values.length + 1 : 1;
 
-      // Update the response in the next empty row
+      // Update the transcribed text in the next empty row
       await sheetsAPI.spreadsheets.values.update({
         auth,
         spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
