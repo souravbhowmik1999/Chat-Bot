@@ -31,7 +31,6 @@ bot.use((ctx, next) => {
 
 bot.start((ctx) => {
   try {
-    console.log('Start command received. Session:', ctx.session);
     ctx.reply('Welcome! I will ask you a series of questions. Type /next to begin.');
   } catch (error) {
     console.error('Error processing /start command:', error.message);
