@@ -3,6 +3,7 @@ const { google } = require('googleapis');
 require('dotenv').config(); // Load environment variables from .env file
 const { transcribeAudio } = require('./api');
 const fs = require('fs');
+const axios = require('axios');
 
 const auth = new google.auth.GoogleAuth({
   keyFile: process.env.GOOGLE_AUTH_KEY_FILE,
@@ -85,52 +86,58 @@ bot.on('text', async (ctx) => {
   }
 });
 
-// bot.on('voice', async (voiceMsg) => {
-//   const NumberOfQuestion = await countQuestion();
-
-//   const voiceFileId = voiceMsg.message.voice.file_id;
-//   const fileType = voiceMsg.message.voice.mime_type;
-
-//     // Check if the voice message contains audio data
-//     if (voiceFileId) {
-//       await bot.getFileLinkAsync(voiceFileId,fileType).then(async (audioLink) => {
-//         const response = await transcribeAudio(audioLink);
-//       });
-//     }
-    
-// });
-
+//GET and store audio file 
 bot.on('voice', async (ctx) => {
   const NumberOfQuestion = await countQuestion();
-
   const voiceFileId = ctx.message.voice.file_id;
   const fileType = ctx.message.voice.mime_type;
-  // console.log(ctx.message.voice);
 
   // Check if the voice message contains audio data
   if (voiceFileId) {
+    const voiceFilePath = `./audio/${voiceFileId}.oga`;
+    const fileLink = await ctx.telegram.getFileLink(voiceFileId);
 
-    const audioLink = await ctx.telegram.getFileLink(voiceFileId, fileType);
-    
-    const audioPath='./AwACAgUAAxkBAAIE0WWpDS29vn8_xdX1IVialT0539R8AAK5DQACcVNIVeUzJY9nyOJNNAQ.oga'
-    const audioContent = fs.readFileSync(audioPath, { encoding: 'base64' });
+    // Download the file using axios
+    const response = await axios({
+      method: 'GET',
+      url: fileLink,
+      responseType: 'stream',
+    });
 
+    // Save the file
+    const fileStream = fs.createWriteStream(voiceFilePath);
+    response.data.pipe(fileStream);
 
-    const response = await transcribeAudio(audioContent);
-    console.log(response);
+    // Wait for the file to be saved
+    await new Promise((resolve) => fileStream.on('finish', resolve));
 
-
-    // // Extract transcribed text from the response
-    // const transcribedText = response.data.results[0]?.alternatives[0]?.transcript;
-
-    // if (transcribedText) {
-    //   // Update the Google Sheet with the transcribed text
-    //   await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, transcribedText);
-    // }
-
-    // console.log('Transcribed Text:', transcribedText);
+    // Transcribe audio and handle the result
+    await handleTranscription(ctx, voiceFilePath, NumberOfQuestion);
   }
 });
+
+//Audio file to text convertion
+async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
+  const audioContent = fs.readFileSync(voiceFilePath, { encoding: 'base64' });
+
+  // Transcribe audio
+  const responseAudio = await transcribeAudio(audioContent);
+  const message = responseAudio.data.output[0].source;
+
+  // Update sheet and perform other actions with the transcription result
+  await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, message);
+  ctx.session.currentQuestionIndex++;
+
+  if (ctx.session.currentQuestionIndex === NumberOfQuestion) {
+    await ctx.reply('Form fillup successfully');
+    await ctx.reply('You have completed the form. Type /start to submit again.');
+    return;
+  } else {
+    const question = await fetchQuestion(ctx.session.currentQuestionIndex);
+    ctx.reply(question.question);
+  }
+}
+
 
 
 
