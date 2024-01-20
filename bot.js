@@ -195,14 +195,43 @@ async function fetchQuestion(index) {
     // Assuming textToAudio is an asynchronous function that returns an object with audioContent
     const audioResponse = await textToAudio(question);
 
+
     // Extract the audio content
     const audioContent = audioResponse.data.audio[0].audioContent;
     
+    let audioQuestion = question.replace(/\s+/g, '-').toLowerCase();
+
+
+
+    const directoryPath = './audio/question';  
+    const searchString = audioQuestion;  // Replace with your desired pattern
+    
+    // Read the contents of the directory
+    fs.readdir(directoryPath, (err, files) => {
+        if (err) {
+            console.error('Error reading directory:', err);
+            return;
+        }
+    
+        // Filter files based on the naming pattern
+        const matchingFiles = files.filter(file => file.includes(searchString));
+    
+        // Log the matching files
+        console.log('Matching files:', matchingFiles);
+    
+        // If you just want an array of file names
+        const fileNamesArray = matchingFiles.map(file => path.basename(file));
+        console.log('File names array:', fileNamesArray);
+    });
+
+
+
+
     // Create a unique filename for the audio file
-    const filename = `audio_${Date.now()}.wav`;
+    const filename = `${audioQuestion}_${Date.now()}.wav`;
 
     // Define the path to the 'audio' folder
-    const filePath = path.join(__dirname, 'audio/wav', filename);
+    const filePath = path.join(__dirname, 'audio/question', filename);
 
     // Convert base64 audio content to binary buffer
     const audioBuffer = Buffer.from(audioContent, 'base64');
