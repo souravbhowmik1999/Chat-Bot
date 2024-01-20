@@ -2,8 +2,10 @@ const { Telegraf, session } = require('telegraf');
 const { google } = require('googleapis');
 require('dotenv').config(); // Load environment variables from .env file
 const { transcribeAudio } = require('./api');
+const { textToAudio } = require('./api');
 const fs = require('fs');
 const axios = require('axios');
+const path = require('path');
 
 const auth = new google.auth.GoogleAuth({
   keyFile: process.env.GOOGLE_AUTH_KEY_FILE,
@@ -51,13 +53,15 @@ bot.command('next', async (ctx) => {
     // Fetch the next question from the Google Sheets
     const question = await fetchQuestion(ctx.session.currentQuestionIndex);
 
-    // Ask the question to the user
-    ctx.reply(question.question);
+    await getNextQuestion(ctx,question)
+
   } catch (error) {
     console.error('Error fetching or processing the next question:', error.message);
     ctx.reply('Error fetching the next question. Please try again later.');
   }
 });
+
+
 
 bot.on('text', async (ctx) => {
   try {
@@ -78,7 +82,7 @@ bot.on('text', async (ctx) => {
       const question = await fetchQuestion(ctx.session.currentQuestionIndex);
 
       // Ask the next question
-      ctx.reply(question.question);
+     await getNextQuestion(ctx,question)
     }
   } catch (error) {
     console.error('Error processing user response:', error.message);
@@ -134,10 +138,17 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
     return;
   } else {
     const question = await fetchQuestion(ctx.session.currentQuestionIndex);
-    ctx.reply(question.question);
+   await getNextQuestion(ctx,question)
   }
 }
 
+
+async function getNextQuestion(ctx,question){
+  // Ask the question to the user in audio format
+  await ctx.replyWithAudio({ source: question.filePath });
+  // Ask the question to the user in text format
+  ctx.reply(question.question);
+} 
 
 
 
@@ -181,7 +192,29 @@ async function fetchQuestion(index) {
 
     console.log('Question fetched successfully:', question);
 
-    return { question, count };
+    // Assuming textToAudio is an asynchronous function that returns an object with audioContent
+    const audioResponse = await textToAudio(question);
+
+    // Extract the audio content
+    const audioContent = audioResponse.data.audio[0].audioContent;
+    
+    // Create a unique filename for the audio file
+    const filename = `audio_${Date.now()}.wav`;
+
+    // Define the path to the 'audio' folder
+    const filePath = path.join(__dirname, 'audio/wav', filename);
+
+    // Convert base64 audio content to binary buffer
+    const audioBuffer = Buffer.from(audioContent, 'base64');
+
+    // Write the audio buffer to the file
+    fs.writeFileSync(filePath, audioBuffer);
+
+    console.log(`Audio saved to: ${filePath}`);
+
+
+
+    return { question, count, filePath };
   } catch (error) {
     console.error('Error fetching question from Google Sheets:', error.message);
     throw error;
