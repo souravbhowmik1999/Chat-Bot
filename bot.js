@@ -172,8 +172,9 @@ async function countQuestion() {
 
 async function fetchQuestion(index) {
   try {
-
+    const directoryPath = './audio/question';  
     const sheetsAPI = google.sheets('v4');
+    
 
     const response = await sheetsAPI.spreadsheets.values.get({
       auth,
@@ -192,56 +193,41 @@ async function fetchQuestion(index) {
 
     console.log('Question fetched successfully:', question);
 
-    // Assuming textToAudio is an asynchronous function that returns an object with audioContent
-    const audioResponse = await textToAudio(question);
-
-
-    // Extract the audio content
-    const audioContent = audioResponse.data.audio[0].audioContent;
-    
+    //Generate File name
     let audioQuestion = question.replace(/\s+/g, '-').toLowerCase();
 
+    //Directory File Read
+    const files = await fs.promises.readdir(directoryPath);
 
+    // Filter files based on the naming pattern
+    const searchString = audioQuestion;
+    let matchingFiles = files.filter(file => file.includes(searchString));
 
-    const directoryPath = './audio/question';  
-    const searchString = audioQuestion;  // Replace with your desired pattern
-    
-    // Read the contents of the directory
-    fs.readdir(directoryPath, (err, files) => {
-        if (err) {
-            console.error('Error reading directory:', err);
-            return;
-        }
-    
-        // Filter files based on the naming pattern
-        const matchingFiles = files.filter(file => file.includes(searchString));
-    
-        // Log the matching files
-        console.log('Matching files:', matchingFiles);
-    
-        // If you just want an array of file names
-        const fileNamesArray = matchingFiles.map(file => path.basename(file));
-        console.log('File names array:', fileNamesArray);
-    });
+    let filePath;
+    if(matchingFiles.length > 0){
+      filePath = path.join(__dirname, 'audio/question', matchingFiles[0]);
+    }else{
 
+      // Assuming textToAudio is an asynchronous function that returns an object with audioContent
+      const audioResponse = await textToAudio(question);
 
+      // Extract the audio content
+      const audioContent = audioResponse.data.audio[0].audioContent;
+      
+      // Create a unique filename for the audio file
+      const filename = `${audioQuestion}_${Date.now()}.wav`;
 
+      // Define the path to the 'audio' folder
+      filePath = path.join(__dirname, 'audio/question', filename);
 
-    // Create a unique filename for the audio file
-    const filename = `${audioQuestion}_${Date.now()}.wav`;
+      // Convert base64 audio content to binary buffer
+      const audioBuffer = Buffer.from(audioContent, 'base64');
 
-    // Define the path to the 'audio' folder
-    const filePath = path.join(__dirname, 'audio/question', filename);
+      // Write the audio buffer to the file
+      fs.writeFileSync(filePath, audioBuffer);
 
-    // Convert base64 audio content to binary buffer
-    const audioBuffer = Buffer.from(audioContent, 'base64');
-
-    // Write the audio buffer to the file
-    fs.writeFileSync(filePath, audioBuffer);
-
-    console.log(`Audio saved to: ${filePath}`);
-
-
+      console.log(`Audio saved to: ${filePath}`);
+    }
 
     return { question, count, filePath };
   } catch (error) {
