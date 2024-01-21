@@ -18,10 +18,9 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 // Apply the session middleware
 bot.use(session());
 
-// Initialize session variables for each user
-bot.use((ctx, next) => {
+
+bot.start(async (ctx) => {
   try {
-    // Check if ctx.session is not defined
     if (!ctx.session) {
       ctx.session = {};
     }
@@ -29,14 +28,6 @@ bot.use((ctx, next) => {
     ctx.session.currentQuestionIndex = ctx.session.currentQuestionIndex || 0;
     ctx.session.currentAnsIndex = ctx.session.currentAnsIndex || 2;
 
-  } catch (error) {
-    console.error('Error initializing session:', error.message);
-  }
-  return next();
-});
-
-bot.start(async (ctx) => {
-  try {
     const formattedResponse = "<b>What can this bot do?</b>\n\nI am a bot designed to help you in your journey to land your dream job!";
     ctx.replyWithHTML(formattedResponse);
 
@@ -55,39 +46,25 @@ return ctx.reply('Please select your language:', Markup.inlineKeyboard([
   Markup.button.callback('English', 'selectLanguage_en'),
   Markup.button.callback('हिंदी', 'selectLanguage_hi'),
   // Markup.button.callback('मराठी', 'selectLanguage_mr'),
-  // Add more language buttons as needed
 ]));
 
 }
-bot.action('selectLanguage_en', (ctx) => {
-  ctx.session.language = 'en';
+bot.action('selectLanguage_en', async (ctx) => {
+  let language = ctx.session.language = 'en';
   ctx.reply('You selected English. You can start your conversation now.');
+
+  // Fetch the next question from the Google Sheets
+  const question = await fetchQuestion(ctx.session.currentQuestionIndex,language);
+  await askQuestion(ctx,question)
 });
 
-bot.action('selectLanguage_hi', (ctx) => {
-  ctx.session.language = 'hi';
+bot.action('selectLanguage_hi', async (ctx) => {
+  let language = ctx.session.language = 'hi';
   ctx.reply('आपने हिंदी का चयन किया। अब आप अपनी बातचीत शुरू कर सकते हैं।');
-});
-// You can add more logic here for handling language options
 
-
-bot.command('next', async (ctx) => {
-  try {
-    const NumberOfQuestion = await countQuestion();
-
-    if (NumberOfQuestion == ctx.session.currentQuestionIndex) {
-      ctx.session.currentQuestionIndex = 0;
-    }
-
-    // Fetch the next question from the Google Sheets
-    const question = await fetchQuestion(ctx.session.currentQuestionIndex);
-
-    await getNextQuestion(ctx,question)
-
-  } catch (error) {
-    console.error('Error fetching or processing the next question:', error.message);
-    ctx.reply('Error fetching the next question. Please try again later.');
-  }
+  // Fetch the next question from the Google Sheets
+  const question = await fetchQuestion(ctx.session.currentQuestionIndex,language);
+  await askQuestion(ctx,question)
 });
 
 
@@ -108,10 +85,10 @@ bot.on('text', async (ctx) => {
       return;
     } else {
       // Fetch the next question from the Google Sheets
-      const question = await fetchQuestion(ctx.session.currentQuestionIndex);
+      const question = await fetchQuestion(ctx.session.currentQuestionIndex,ctx.session.language);
 
       // Ask the next question
-     await getNextQuestion(ctx,question)
+     await askQuestion(ctx,question)
     }
   } catch (error) {
     console.error('Error processing user response:', error.message);
@@ -154,8 +131,10 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
   const audioContent = fs.readFileSync(voiceFilePath, { encoding: 'base64' });
 
   // Transcribe audio
-  const responseAudio = await transcribeAudio(audioContent);
+  const responseAudio = await transcribeAudio(audioContent, ctx.session.language);
   const message = responseAudio.data.output[0].source;
+
+  // console.log(responseAudio);
 
   // Update sheet and perform other actions with the transcription result
   await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, message);
@@ -166,18 +145,10 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
     await ctx.reply('You have completed the form. Type /start to submit again.');
     return;
   } else {
-    const question = await fetchQuestion(ctx.session.currentQuestionIndex);
-   await getNextQuestion(ctx,question)
+    const question = await fetchQuestion(ctx.session.currentQuestionIndex,ctx.session.language);
+   await askQuestion(ctx,question)
   }
 }
-
-
-async function getNextQuestion(ctx,question){
-  // Ask the question to the user in audio format
-  await ctx.replyWithAudio({ source: question.filePath });
-  // Ask the question to the user in text format
-  ctx.reply(question.question);
-} 
 
 
 
@@ -187,7 +158,7 @@ async function countQuestion() {
   const response = await sheetsAPI.spreadsheets.values.get({
     auth,
     spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
-    range: `Form Responses 1!A1:Z1`,
+    range: `${process.env.GOOGLE_SHEET_NAME}!A1:Z1`,
   });
 
   // Get all questions from the google sheet
@@ -199,16 +170,29 @@ async function countQuestion() {
   return count;
 }
 
-async function fetchQuestion(index) {
+async function fetchQuestion(index,language) {
   try {
     const directoryPath = './audio/question';  
     const sheetsAPI = google.sheets('v4');
-    
+    let sheetRange;
+    const NumberOfQuestion = await countQuestion();
 
+    //Complete all question after then restart ask question again one by one 
+    if (NumberOfQuestion == index) {
+      index = 0;
+    }
+    //Chose english language question from google sheet
+    if(language == 'en'){
+      sheetRange = `${process.env.GOOGLE_SHEET_NAME}!A1:Z1`
+    }
+    //Chose Hindi language question from google sheet
+    else if(language == 'hi'){
+      sheetRange = `${process.env.GOOGLE_SHEET_NAME}!A2:Z2`
+    }
     const response = await sheetsAPI.spreadsheets.values.get({
       auth,
       spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
-      range: `Form Responses 1!A1:Z1`,
+      range: sheetRange,
     });
 
     const valuesArray = response.data.values[0];
@@ -238,7 +222,7 @@ async function fetchQuestion(index) {
     }else{
 
       // Assuming textToAudio is an asynchronous function that returns an object with audioContent
-      const audioResponse = await textToAudio(question);
+      const audioResponse = await textToAudio(question,language);
 
       // Extract the audio content
       const audioContent = audioResponse.data.audio[0].audioContent;
@@ -265,12 +249,19 @@ async function fetchQuestion(index) {
   }
 }
 
+async function askQuestion(ctx,question){
+  // Ask the question to the user in audio format
+  await ctx.replyWithAudio({ source: question.filePath });
+  // Ask the question to the user in text format
+  ctx.reply(question.question);
+} 
+
 async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
   try {
     const sheetsAPI = google.sheets('v4');
 
     const columnLetter = String.fromCharCode('A'.charCodeAt(0) + currentQuestionIndex);
-    const range = `Form Responses 1!${columnLetter}${currentAnsIndex}`;
+    const range = `${process.env.GOOGLE_SHEET_NAME}!${columnLetter}${currentAnsIndex}`;
 
     // Check if the cell is blank
     const checkBlankResponse = await sheetsAPI.spreadsheets.values.get({
@@ -297,7 +288,7 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
       const nextEmptyRowResponse = await sheetsAPI.spreadsheets.values.get({
         auth,
         spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
-        range: `Form Responses 1!${columnLetter}:${columnLetter}`,
+        range: `${process.env.GOOGLE_SHEET_NAME}!${columnLetter}:${columnLetter}`,
       });
 
       const nextEmptyRow = nextEmptyRowResponse.data.values ? nextEmptyRowResponse.data.values.length + 1 : 1;
@@ -306,7 +297,7 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
       await sheetsAPI.spreadsheets.values.update({
         auth,
         spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
-        range: `Form Responses 1!${columnLetter}${nextEmptyRow}`,
+        range: `${process.env.GOOGLE_SHEET_NAME}!${columnLetter}${nextEmptyRow}`,
         valueInputOption: 'RAW',
         resource: {
           values: [[response]],
