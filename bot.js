@@ -17,7 +17,7 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 // Apply the session middleware
 bot.use(session());
-
+const userResponses = [];
 
 bot.start(async (ctx) => {
   try {
@@ -76,11 +76,15 @@ bot.on('text', async (ctx) => {
     // Update the Google Sheets with the user's response
     await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, ctx.message.text);
 
+    //Store message into an array
+    userResponses.push(ctx.message.text);
+
     // Increment the question index
     ctx.session.currentQuestionIndex++;
 
     if (ctx.session.currentQuestionIndex == NumberOfQuestion) {
       await ctx.reply('Form fillup successfully');
+      // await ctx.reply(userResponses);
       await ctx.reply('You have completed the form. Type /start to submit again.');
       return;
     } else {
@@ -134,7 +138,8 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
   const responseAudio = await transcribeAudio(audioContent, ctx.session.language);
   const message = responseAudio.data.output[0].source;
 
-  // console.log(responseAudio);
+  //Store message into an array
+  userResponses.push(message);
 
   // Update sheet and perform other actions with the transcription result
   await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, message);
@@ -142,6 +147,7 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
 
   if (ctx.session.currentQuestionIndex === NumberOfQuestion) {
     await ctx.reply('Form fillup successfully');
+    // await ctx.reply(userResponses);
     await ctx.reply('You have completed the form. Type /start to submit again.');
     return;
   } else {
@@ -207,7 +213,9 @@ async function fetchQuestion(index,language) {
     console.log('Question fetched successfully:', question);
 
     //Generate File name
-    let audioQuestion = question.replace(/\s+/g, '-').toLowerCase();
+    // let audioQuestion = question.replace(/\s+/g, '-').toLowerCase();
+    let audioQuestion = question.substring(0, 15).replace(/\s+/g, '-').toLowerCase();
+
 
     //Directory File Read
     const files = await fs.promises.readdir(directoryPath);
