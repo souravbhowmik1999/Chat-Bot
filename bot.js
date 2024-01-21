@@ -1,4 +1,5 @@
 const { Telegraf, session } = require('telegraf');
+const { Markup } = require('telegraf');
 const { google } = require('googleapis');
 require('dotenv').config(); // Load environment variables from .env file
 const { transcribeAudio } = require('./api');
@@ -34,13 +35,41 @@ bot.use((ctx, next) => {
   return next();
 });
 
-bot.start((ctx) => {
+bot.start(async (ctx) => {
   try {
-    ctx.reply('Welcome! I will ask you a series of questions. Type /next to begin.');
+    const formattedResponse = "<b>What can this bot do?</b>\n\nI am a bot designed to help you in your journey to land your dream job!";
+    ctx.replyWithHTML(formattedResponse);
+
+    // Ask the user to choose a language
+    const languageData = await fetchLanguage(ctx);
+
   } catch (error) {
     console.error('Error processing /start command:', error.message);
   }
 });
+
+async function fetchLanguage(ctx) {
+
+// Send a message with language selection buttons
+return ctx.reply('Please select your language:', Markup.inlineKeyboard([
+  Markup.button.callback('English', 'selectLanguage_en'),
+  Markup.button.callback('हिंदी', 'selectLanguage_hi'),
+  // Markup.button.callback('मराठी', 'selectLanguage_mr'),
+  // Add more language buttons as needed
+]));
+
+}
+bot.action('selectLanguage_en', (ctx) => {
+  ctx.session.language = 'en';
+  ctx.reply('You selected English. You can start your conversation now.');
+});
+
+bot.action('selectLanguage_hi', (ctx) => {
+  ctx.session.language = 'hi';
+  ctx.reply('आपने हिंदी का चयन किया। अब आप अपनी बातचीत शुरू कर सकते हैं।');
+});
+// You can add more logic here for handling language options
+
 
 bot.command('next', async (ctx) => {
   try {
