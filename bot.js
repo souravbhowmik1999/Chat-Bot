@@ -14,10 +14,11 @@ const auth = new google.auth.GoogleAuth({
 });
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const allResponses = {};
 
 // Apply the session middleware
 bot.use(session());
-const userResponses = [];
+let summeryQuestions;
 
 bot.start(async (ctx) => {
   try {
@@ -25,8 +26,8 @@ bot.start(async (ctx) => {
       ctx.session = {};
     }
 
-    ctx.session.currentQuestionIndex = ctx.session.currentQuestionIndex || 0;
-    ctx.session.currentAnsIndex = ctx.session.currentAnsIndex || 2;
+    ctx.session.currentQuestionIndex = 0;
+    ctx.session.currentAnsIndex = 2;
 
     const formattedResponse = "<b>What can this bot do?</b>\n\nI am a bot designed to help you in your journey to land your dream job!";
     ctx.replyWithHTML(formattedResponse);
@@ -71,20 +72,45 @@ bot.action('selectLanguage_hi', async (ctx) => {
 
 bot.on('text', async (ctx) => {
   try {
+    if(ctx.session.language == 'hi'){
+      summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_HI);
+    }
+    else if(ctx.session.language == 'en'){
+      summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_EN);
+    }
+
     const NumberOfQuestion = await countQuestion();
 
     // Update the Google Sheets with the user's response
     await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, ctx.message.text);
 
-    //Store message into an array
-    userResponses.push(ctx.message.text);
+    // Store message into the array for the current question
+    const currentQuestion = await fetchQuestion(ctx.session.currentQuestionIndex, ctx.session.language);
+
+    const summeryQuestionIndex = ctx.session.currentQuestionIndex;
+
+    if (!allResponses[summeryQuestions[summeryQuestionIndex]]) {
+      allResponses[summeryQuestions[summeryQuestionIndex]] = [];
+    }
+
+    allResponses[summeryQuestions[summeryQuestionIndex]].push(ctx.message.text);
 
     // Increment the question index
     ctx.session.currentQuestionIndex++;
 
     if (ctx.session.currentQuestionIndex == NumberOfQuestion) {
-      await ctx.reply('Form fillup successfully');
-      // await ctx.reply(userResponses);
+      if(ctx.session.language == 'en'){
+        await ctx.reply('Let me just summarise that for you');
+      }
+      else if(ctx.session.language == 'hi'){
+        await ctx.reply('मैं आपके लिए इसे संक्षेप में बता दूं');
+      }
+      
+
+      const arrayOfStrings = Object.entries(allResponses).map(([key, value]) => `${key}: ${value[0]}`);
+      const finalSummeryText = arrayOfStrings.join('\n');
+      ctx.reply(finalSummeryText)
+      
       await ctx.reply('You have completed the form. Type /start to submit again.');
       return;
     } else {
@@ -102,6 +128,7 @@ bot.on('text', async (ctx) => {
 
 //GET and store audio file 
 bot.on('voice', async (ctx) => {
+
   const NumberOfQuestion = await countQuestion();
   const voiceFileId = ctx.message.voice.file_id;
   const fileType = ctx.message.voice.mime_type;
@@ -132,22 +159,48 @@ bot.on('voice', async (ctx) => {
 
 //Audio file to text convertion
 async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
+  if(ctx.session.language == 'hi'){
+    summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_HI);
+  }
+  else if(ctx.session.language == 'en'){
+    summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_EN);
+  }
+
   const audioContent = fs.readFileSync(voiceFilePath, { encoding: 'base64' });
 
   // Transcribe audio
   const responseAudio = await transcribeAudio(audioContent, ctx.session.language);
   const message = responseAudio.data.output[0].source;
 
-  //Store message into an array
-  userResponses.push(message);
+
 
   // Update sheet and perform other actions with the transcription result
   await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, message);
+
+  // Store message into the array for the current question
+    const summeryQuestionIndex = ctx.session.currentQuestionIndex;
+
+    if (!allResponses[summeryQuestions[summeryQuestionIndex]]) {
+      allResponses[summeryQuestions[summeryQuestionIndex]] = [];
+    }
+
+    allResponses[summeryQuestions[summeryQuestionIndex]].push(message);
+
   ctx.session.currentQuestionIndex++;
 
   if (ctx.session.currentQuestionIndex === NumberOfQuestion) {
-    await ctx.reply('Form fillup successfully');
-    // await ctx.reply(userResponses);
+    if(ctx.session.language == 'en'){
+      await ctx.reply('Let me just summarise that for you');
+    }
+    else if(ctx.session.language == 'hi'){
+      await ctx.reply('मैं आपके लिए इसे संक्षेप में बता दूं');
+    }
+    
+
+    const arrayOfStrings = Object.entries(allResponses).map(([key, value]) => `${key}: ${value[0]}`);
+    const finalSummeryText = arrayOfStrings.join('\n');
+    ctx.reply(finalSummeryText)
+
     await ctx.reply('You have completed the form. Type /start to submit again.');
     return;
   } else {
@@ -176,7 +229,7 @@ async function countQuestion() {
   return count;
 }
 
-async function fetchQuestion(index,language) {
+async function fetchQuestion(currentQuestionIndex,language) {
   try {
     const directoryPath = './audio/question';  
     const sheetsAPI = google.sheets('v4');
@@ -184,8 +237,8 @@ async function fetchQuestion(index,language) {
     const NumberOfQuestion = await countQuestion();
 
     //Complete all question after then restart ask question again one by one 
-    if (NumberOfQuestion == index) {
-      index = 0;
+    if (NumberOfQuestion == currentQuestionIndex) {
+      currentQuestionIndex = 0;
     }
     //Chose english language question from google sheet
     if(language == 'en'){
@@ -195,6 +248,7 @@ async function fetchQuestion(index,language) {
     else if(language == 'hi'){
       sheetRange = `${process.env.GOOGLE_SHEET_NAME}!A2:Z2`
     }
+
     const response = await sheetsAPI.spreadsheets.values.get({
       auth,
       spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
@@ -203,7 +257,12 @@ async function fetchQuestion(index,language) {
 
     const valuesArray = response.data.values[0];
 
-    const question = valuesArray[index];
+    // Check if valuesArray is empty or null
+    if (!valuesArray || valuesArray.length === 0) {
+      throw new Error('No questions found in the specified range.');
+    }
+
+    const question = valuesArray[currentQuestionIndex];
 
     if (!question || question.trim() === '') {
       throw new Error('Empty question received from Google Sheets.');
@@ -214,7 +273,7 @@ async function fetchQuestion(index,language) {
 
     //Generate File name
     // let audioQuestion = question.replace(/\s+/g, '-').toLowerCase();
-    let audioQuestion = question.substring(0, 15).replace(/\s+/g, '-').toLowerCase();
+    let audioQuestion = question.substring(0, 10).replace(/\s+/g, '-').toLowerCase();
 
 
     //Directory File Read
@@ -323,4 +382,3 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
 bot.launch({ polling: { debug: true } }).then(() => {
   console.log('Bot is running');
 });
-
