@@ -14,12 +14,11 @@ const auth = new google.auth.GoogleAuth({
 });
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-let summeryQuestions;
 
 
 // Apply the session middleware
 bot.use(session());
-
+let summeryQuestions;
 
 bot.start(async (ctx) => {
   try {
