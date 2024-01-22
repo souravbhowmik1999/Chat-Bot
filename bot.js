@@ -14,7 +14,8 @@ const auth = new google.auth.GoogleAuth({
 });
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-const allResponses = {};
+let allResponses = {};
+
 
 // Apply the session middleware
 bot.use(session());
@@ -109,8 +110,8 @@ bot.on('text', async (ctx) => {
 
       const arrayOfStrings = Object.entries(allResponses).map(([key, value]) => `${key}: ${value[0]}`);
       const finalSummeryText = arrayOfStrings.join('\n');
-      ctx.reply(finalSummeryText)
-      
+      await ctx.reply(finalSummeryText)
+      allResponses = {};
       await ctx.reply('You have completed the form. Type /start to submit again.');
       return;
     } else {
