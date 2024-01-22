@@ -112,6 +112,7 @@ bot.on('text', async (ctx) => {
       const arrayOfStrings = Object.entries(ctx.session.allResponses).map(([key, value]) => `<b>${key}:</b> ${value[0]}`);
       const finalSummeryText = arrayOfStrings.join('\n');
       await ctx.replyWithHTML(finalSummeryText)
+      
       ctx.session.allResponses = {};
       await ctx.reply('You have completed the form. Type /start to submit again.');
       return;
