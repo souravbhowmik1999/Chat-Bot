@@ -18,13 +18,14 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 // Apply the session middleware
 bot.use(session());
-let summeryQuestions;
+
 
 bot.start(async (ctx) => {
   try {
     if (!ctx.session) {
       ctx.session = {};
     }
+    ctx.session.summeryQuestions;
     ctx.session.allResponses = {};
     ctx.session.currentQuestionIndex = 0;
     ctx.session.currentAnsIndex = 2;
@@ -74,10 +75,10 @@ bot.action('selectLanguage_hi', async (ctx) => {
 bot.on('text', async (ctx) => {
   try {
     if(ctx.session.language == 'hi'){
-      summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_HI);
+      ctx.session.summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_HI);
     }
     else if(ctx.session.language == 'en'){
-      summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_EN);
+      ctx.session.summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_EN);
     }
 
     const NumberOfQuestion = await countQuestion();
@@ -90,11 +91,11 @@ bot.on('text', async (ctx) => {
 
     const summeryQuestionIndex = ctx.session.currentQuestionIndex;
 
-    if (!ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]]) {
-      ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]] = [];
+    if (!ctx.session.allResponses[ctx.session.summeryQuestions[summeryQuestionIndex]]) {
+      ctx.session.allResponses[ctx.session.summeryQuestions[summeryQuestionIndex]] = [];
     }
 
-    ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]].push(ctx.message.text);
+    ctx.session.allResponses[ctx.session.summeryQuestions[summeryQuestionIndex]].push(ctx.message.text);
 
     // Increment the question index
     ctx.session.currentQuestionIndex++;
@@ -161,10 +162,10 @@ bot.on('voice', async (ctx) => {
 //Audio file to text convertion
 async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
   if(ctx.session.language == 'hi'){
-    summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_HI);
+    ctx.session.summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_HI);
   }
   else if(ctx.session.language == 'en'){
-    summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_EN);
+    ctx.session.summeryQuestions = JSON.parse(process.env.SUMMARY_QUESTIONS_LIST_EN);
   }
 
   const audioContent = fs.readFileSync(voiceFilePath, { encoding: 'base64' });
@@ -181,11 +182,11 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
   // Store message into the array for the current question
     const summeryQuestionIndex = ctx.session.currentQuestionIndex;
 
-    if (!ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]]) {
-      ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]] = [];
+    if (!ctx.session.allResponses[ctx.session.summeryQuestions[summeryQuestionIndex]]) {
+      ctx.session.allResponses[ctx.session.summeryQuestions[summeryQuestionIndex]] = [];
     }
 
-    ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]].push(message);
+    ctx.session.allResponses[ctx.session.summeryQuestions[summeryQuestionIndex]].push(message);
 
   ctx.session.currentQuestionIndex++;
 
