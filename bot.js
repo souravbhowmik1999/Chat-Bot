@@ -25,6 +25,7 @@ bot.start(async (ctx) => {
     if (!ctx.session) {
       ctx.session = {};
     }
+    
     ctx.session.summeryQuestions;
     ctx.session.allResponses = {};
     ctx.session.currentQuestionIndex = 0;
