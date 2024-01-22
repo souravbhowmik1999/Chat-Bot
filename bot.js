@@ -14,7 +14,7 @@ const auth = new google.auth.GoogleAuth({
 });
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
+let summeryQuestions;
 
 
 // Apply the session middleware
