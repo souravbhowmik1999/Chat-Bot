@@ -14,19 +14,19 @@ const auth = new google.auth.GoogleAuth({
 });
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-let allResponses = {};
+
 
 
 // Apply the session middleware
 bot.use(session());
-let summeryQuestions;
+
 
 bot.start(async (ctx) => {
   try {
     if (!ctx.session) {
       ctx.session = {};
     }
-
+    ctx.session.allResponses = {};
     ctx.session.currentQuestionIndex = 0;
     ctx.session.currentAnsIndex = 2;
     ctx.session.userGoogleSheetRow = 0;
@@ -91,11 +91,11 @@ bot.on('text', async (ctx) => {
 
     const summeryQuestionIndex = ctx.session.currentQuestionIndex;
 
-    if (!allResponses[summeryQuestions[summeryQuestionIndex]]) {
-      allResponses[summeryQuestions[summeryQuestionIndex]] = [];
+    if (!ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]]) {
+      ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]] = [];
     }
 
-    allResponses[summeryQuestions[summeryQuestionIndex]].push(ctx.message.text);
+    ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]].push(ctx.message.text);
 
     // Increment the question index
     ctx.session.currentQuestionIndex++;
@@ -109,10 +109,10 @@ bot.on('text', async (ctx) => {
       }
       
 
-      const arrayOfStrings = Object.entries(allResponses).map(([key, value]) => `${key}: ${value[0]}`);
+      const arrayOfStrings = Object.entries(ctx.session.allResponses).map(([key, value]) => `${key}: ${value[0]}`);
       const finalSummeryText = arrayOfStrings.join('\n');
       await ctx.reply(finalSummeryText)
-      allResponses = {};
+      ctx.session.allResponses = {};
       await ctx.reply('You have completed the form. Type /start to submit again.');
       return;
     } else {
@@ -182,11 +182,11 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
   // Store message into the array for the current question
     const summeryQuestionIndex = ctx.session.currentQuestionIndex;
 
-    if (!allResponses[summeryQuestions[summeryQuestionIndex]]) {
-      allResponses[summeryQuestions[summeryQuestionIndex]] = [];
+    if (!ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]]) {
+      ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]] = [];
     }
 
-    allResponses[summeryQuestions[summeryQuestionIndex]].push(message);
+    ctx.session.allResponses[summeryQuestions[summeryQuestionIndex]].push(message);
 
   ctx.session.currentQuestionIndex++;
 
@@ -199,7 +199,7 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
     }
     
 
-    const arrayOfStrings = Object.entries(allResponses).map(([key, value]) => `${key}: ${value[0]}`);
+    const arrayOfStrings = Object.entries(ctx.session.allResponses).map(([key, value]) => `${key}: ${value[0]}`);
     const finalSummeryText = arrayOfStrings.join('\n');
     ctx.reply(finalSummeryText)
 
