@@ -29,6 +29,7 @@ bot.start(async (ctx) => {
 
     ctx.session.currentQuestionIndex = 0;
     ctx.session.currentAnsIndex = 2;
+    ctx.session.userGoogleSheetRow = 0;
 
     const formattedResponse = "<b>What can this bot do?</b>\n\nI am a bot designed to help you in your journey to land your dream job!";
     ctx.replyWithHTML(formattedResponse);
@@ -83,7 +84,7 @@ bot.on('text', async (ctx) => {
     const NumberOfQuestion = await countQuestion();
 
     // Update the Google Sheets with the user's response
-    await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, ctx.message.text);
+    await updateSheet(ctx,ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, ctx.message.text);
 
     // Store message into the array for the current question
     const currentQuestion = await fetchQuestion(ctx.session.currentQuestionIndex, ctx.session.language);
@@ -176,7 +177,7 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
 
 
   // Update sheet and perform other actions with the transcription result
-  await updateSheet(ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, message);
+  await updateSheet(ctx,ctx.session.currentQuestionIndex, ctx.session.currentAnsIndex, message);
 
   // Store message into the array for the current question
     const summeryQuestionIndex = ctx.session.currentQuestionIndex;
@@ -324,7 +325,7 @@ async function askQuestion(ctx,question){
   ctx.reply(question.question);
 } 
 
-async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
+async function updateSheet(ctx,currentQuestionIndex, currentAnsIndex, response) {
   try {
     const sheetsAPI = google.sheets('v4');
 
@@ -361,11 +362,15 @@ async function updateSheet(currentQuestionIndex, currentAnsIndex, response) {
 
       const nextEmptyRow = nextEmptyRowResponse.data.values ? nextEmptyRowResponse.data.values.length + 1 : 1;
 
+      if(currentQuestionIndex == 0 && nextEmptyRow){
+        ctx.session.userGoogleSheetRow = nextEmptyRow;
+      }
+
       // Update the transcribed text in the next empty row
       await sheetsAPI.spreadsheets.values.update({
         auth,
         spreadsheetId: process.env.GOOGLE_SPREAD_SHEET_ID,
-        range: `${process.env.GOOGLE_SHEET_NAME}!${columnLetter}${nextEmptyRow}`,
+        range: `${process.env.GOOGLE_SHEET_NAME}!${columnLetter}${ctx.session.userGoogleSheetRow}`,
         valueInputOption: 'RAW',
         resource: {
           values: [[response]],
