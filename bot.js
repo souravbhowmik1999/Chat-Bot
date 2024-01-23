@@ -31,8 +31,8 @@ bot.start(async (ctx) => {
     ctx.session.currentAnsIndex = 2;
     ctx.session.userGoogleSheetRow = 0;
 
-    const formattedResponse = "<b>What can this bot do?</b>\n\nI am a bot designed to help you in your journey to land your dream job!";
-    ctx.replyWithHTML(formattedResponse);
+    const formattedResponse = process.env.WELCOME_MESSAGE;
+    ctx.replyWithHTML(formattedResponse, { parse_mode: 'Markdown' });
 
     // Ask the user to choose a language
     const languageData = await fetchLanguage(ctx);
@@ -43,18 +43,17 @@ bot.start(async (ctx) => {
 });
 
 async function fetchLanguage(ctx) {
-
-// Send a message with language selection buttons
-return ctx.reply('Please select your language:', Markup.inlineKeyboard([
-  Markup.button.callback('English', 'selectLanguage_en'),
-  Markup.button.callback('हिंदी', 'selectLanguage_hi'),
-  // Markup.button.callback('मराठी', 'selectLanguage_mr'),
-]));
-
+  // Send a message with language selection buttons
+  return ctx.reply('Please select your language:', Markup.inlineKeyboard([
+    Markup.button.callback('English', 'selectLanguage_en'),
+    Markup.button.callback('हिंदी', 'selectLanguage_hi'),
+    // Markup.button.callback('मराठी', 'selectLanguage_mr'),
+  ]));
 }
 bot.action('selectLanguage_en', async (ctx) => {
   let language = ctx.session.language = 'en';
   ctx.reply('You selected English. You can start your conversation now.');
+  await replymessage(ctx);
 
   // Fetch the next question from the Google Sheets
   const question = await fetchQuestion(ctx.session.currentQuestionIndex,language);
@@ -64,12 +63,21 @@ bot.action('selectLanguage_en', async (ctx) => {
 bot.action('selectLanguage_hi', async (ctx) => {
   let language = ctx.session.language = 'hi';
   ctx.reply('आपने हिंदी का चयन किया। अब आप अपनी बातचीत शुरू कर सकते हैं।');
-
+  await replymessage(ctx);
+  
   // Fetch the next question from the Google Sheets
   const question = await fetchQuestion(ctx.session.currentQuestionIndex,language);
   await askQuestion(ctx,question)
 });
 
+async function replymessage(ctx) {
+  if(ctx.session.language == 'hi'){
+    ctx.reply(process.env.REPLY_TYPE_HI)
+  }
+  if(ctx.session.language == 'en'){
+    ctx.reply(process.env.REPLY_TYPE_EN)
+  }
+}
 
 
 bot.on('text', async (ctx) => {
@@ -109,9 +117,9 @@ bot.on('text', async (ctx) => {
       }
       
 
-      const arrayOfStrings = Object.entries(ctx.session.allResponses).map(([key, value]) => `<b>${key}:</b> ${value[0]}`);
+      const arrayOfStrings = Object.entries(ctx.session.allResponses).map(([key, value]) => `*${key}:* ${value[0]}`);
       const finalSummeryText = arrayOfStrings.join('\n');
-      await ctx.replyWithHTML(finalSummeryText)
+      await ctx.replyWithHTML(finalSummeryText, { parse_mode: 'Markdown' })
       
       ctx.session.allResponses = {};
       await ctx.reply('You have completed the form. Type /start to submit again.');
@@ -200,9 +208,9 @@ async function handleTranscription(ctx, voiceFilePath, NumberOfQuestion) {
     }
     
 
-    const arrayOfStrings = Object.entries(ctx.session.allResponses).map(([key, value]) => `${key}: ${value[0]}`);
+    const arrayOfStrings = Object.entries(ctx.session.allResponses).map(([key, value]) => `*${key}:* ${value[0]}`);
     const finalSummeryText = arrayOfStrings.join('\n');
-    ctx.reply(finalSummeryText)
+    ctx.reply(finalSummeryText, { parse_mode: 'Markdown' })
 
     await ctx.reply('You have completed the form. Type /start to submit again.');
     return;
